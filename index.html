@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="واصل">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="واصل">
+<title>💬 واصل — مراسلات مشفّرة P2P</title>
+
+<link rel="manifest" href='data:application/manifest+json,{
+"name": "واصل — مراسلات مشفّرة",
+"short_name": "واصل",
+"description": "تطبيق مراسلات P2P مشفّر بدون خادم",
+"start_url": ".",
+"scope": ".",
+"display": "standalone",
+"orientation": "portrait",
+"background_color": "#6366f1",
+"theme_color": "#6366f1",
+"lang": "ar",
+"dir": "rtl",
+"icons": [{
+"src": "data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 512 512%27%3E%3Crect width=%27512%27 height=%27512%27 rx=%27100%27 fill=%27%236366f1%27/%3E%3Ctext x=%27256%27 y=%27340%27 font-size=%27280%27 text-anchor=%27middle%27 fill=%27white%27 font-family=%27Arial%27%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E",
+"sizes": "512x512",
+"type": "image/svg+xml",
+"purpose": "any maskable"
+}]
+}'>
+
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 512 512%27%3E%3Crect width=%27512%27 height=%27512%27 rx=%27100%27 fill=%27%236366f1%27/%3E%3Ctext x=%27256%27 y=%27340%27 font-size=%27280%27 text-anchor=%27middle%27%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E">
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; -webkit-tap-highlight-color: transparent; }
+
+:root {
+--primary: #6366f1;
+--primary-dark: #4f46e5;
+--bg: #f8fafc;
+--panel: #ffffff;
+--bubble-me: linear-gradient(135deg, #6366f1, #8b5cf6);
+--bubble-other: #ffffff;
+--text-dark: #1e293b;
+--text-light: #64748b;
+--border: #e2e8f0;
+--success: #10b981;
+--danger: #ef4444;
+--warning: #f59e0b;
+}
+
+body.dark {
+--bg: #0f172a;
+--panel: #1e293b;
+--bubble-other: #334155;
+--text-dark: #f1f5f9;
+--text-light: #94a3b8;
+--border: #334155;
+}
+
+html, body {
+height: 100%;
+width: 100%;
+overflow: hidden;
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+transition: background 0.4s;
+}
+body.dark { background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); }
+
+.app {
+width: 100%;
+height: 100%;
+background: var(--bg);
+display: flex;
+overflow: hidden;
+position: relative;
+transition: background 0.3s;
+}
+
+@media (min-width: 768px) {
+html, body {
+display: flex;
+align-items: center;
+justify-content: center;
+padding: 20px;
+}
+.app {
+max-width: 520px;
+max-height: 800px;
+height: 92vh;
+border-radius: 24px;
+box-shadow: 0 25px 50px rgba(0,0,0,0.35);
+}
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+position: absolute;
+top: 0; right: 0; bottom: 0;
+width: 260px;
+background: var(--panel);
+border-left: 1px solid var(--border);
+display: flex;
+flex-direction: column;
+transform: translateX(100%);
+transition: transform 0.3s ease;
+z-index: 100;
+box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+}
+.sidebar.open { transform: translateX(0); }
+
+.sidebar-header {
+padding: 16px;
+padding-top: max(16px, env(safe-area-inset-top));
+border-bottom: 1px solid var(--border);
+display: flex;
+align-items: center;
+justify-content: space-between;
+flex-shrink: 0;
+}
+.sidebar-header h3 { font-size: 15px; color: var(--text-dark); }
+
+.new-chat-btn {
+background: var(--primary);
+color: white;
+border: none;
+width: 32px; height: 32px;
+border-radius: 8px;
+cursor: pointer;
+font-size: 16px;
+}
+
+.chat-list { flex: 1; overflow-y: auto; padding: 8px; }
+
+.chat-item {
+padding: 12px;
+border-radius: 12px;
+cursor: pointer;
+margin-bottom: 4px;
+display: flex;
+align-items: center;
+gap: 10px;
+transition: background 0.2s;
+}
+.chat-item:hover, .chat-item.active { background: rgba(99,102,241,0.12); }
+
+.chat-item-avatar {
+width: 38px; height: 38px;
+border-radius: 50%;
+background: linear-gradient(135deg, var(--primary), #8b5cf6);
+color: white;
+display: flex; align-items: center; justify-content: center;
+font-weight: 600;
+font-size: 12px;
+flex-shrink: 0;
+font-family: 'Courier New', monospace;
+}
+
+.chat-item-info { flex: 1; min-width: 0; }
+.chat-item-name { font-size: 13px; font-weight: 600; color: var(--text-dark); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-item-preview { font-size: 11.5px; color: var(--text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.chat-item-delete {
+background: transparent;
+border: none;
+color: var(--danger);
+cursor: pointer;
+font-size: 14px;
+padding: 4px;
+opacity: 0.6;
+}
+
+/* ===== Main ===== */
+.main {
+flex: 1;
+display: flex;
+flex-direction: column;
+min-width: 0;
+height: 100%;
+width: 100%;
+}
+
+/* ===== Header ===== */
+.header {
+background: linear-gradient(135deg, var(--primary), #8b5cf6);
+color: white;
+padding: 12px 14px;
+padding-top: max(12px, env(safe-area-inset-top));
+display: flex;
+align-items: center;
+gap: 8px;
+box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+z-index: 10;
+flex-shrink: 0;
+}
+body.dark .header { background: linear-gradient(135deg, #4338ca, #6d28d9); }
+
+.header-btn {
+background: rgba(255,255,255,0.18);
+border: none;
+color: white;
+width: 36px; height: 36px;
+border-radius: 10px;
+cursor: pointer;
+font-size: 16px;
+display: flex; align-items: center; justify-content: center;
+transition: background 0.2s;
+flex-shrink: 0;
+}
+.header-btn:active { background: rgba(255,255,255,0.32); }
+
+.avatar {
+width: 42px; height: 42px;
+border-radius: 50%;
+background: rgba(255,255,255,0.25);
+display: flex; align-items: center; justify-content: center;
+font-size: 20px;
+border: 2px solid rgba(255,255,255,0.4);
+flex-shrink: 0;
+}
+
+.header-info { flex: 1; min-width: 0; }
+.header-info h1 { font-size: 15px; font-weight: 600; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status { font-size: 11.5px; display: flex; align-items: center; gap: 6px; opacity: 0.95; }
+.status-dot {
+width: 8px; height: 8px; border-radius: 50%;
+background: #fbbf24; box-shadow: 0 0 8px #fbbf24;
+transition: all 0.3s;
+}
+.status-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.status-dot.offline { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+/* ===== Connection Panel ===== */
+.connect-panel {
+padding: 10px 12px;
+background: var(--panel);
+border-bottom: 1px solid var(--border);
+flex-shrink: 0;
+}
+
+.my-id-box { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+
+.my-id {
+flex: 1;
+background: rgba(99,102,241,0.1);
+padding: 9px 12px;
+border-radius: 10px;
+font-size: 17px;
+color: var(--primary);
+font-weight: 700;
+font-family: 'Courier New', monospace;
+overflow: hidden;
+text-overflow: ellipsis;
+white-space: nowrap;
+direction: ltr;
+text-align: center;
+letter-spacing: 3px;
+}
+
+.icon-btn {
+background: var(--primary);
+color: white;
+border: none;
+width: 36px; height: 36px;
+border-radius: 10px;
+cursor: pointer;
+font-size: 15px;
+transition: all 0.2s;
+flex-shrink: 0;
+}
+
+.connect-form { display: flex; gap: 6px; align-items: center; }
+
+.connect-form input {
+flex: 1;
+padding: 9px 12px;
+border: 2px solid var(--border);
+background: var(--bg);
+color: var(--text-dark);
+border-radius: 10px;
+font-size: 15px;
+outline: none;
+font-family: 'Courier New', monospace;
+min-width: 0;
+direction: ltr;
+text-align: center;
+letter-spacing: 2px;
+font-weight: 600;
+}
+.connect-form input:focus { border-color: var(--primary); }
+
+.connect-form button.connect-btn {
+padding: 9px 18px;
+background: var(--primary);
+color: white;
+border: none;
+border-radius: 10px;
+font-size: 13px;
+font-weight: 600;
+cursor: pointer;
+flex-shrink: 0;
+}
+.connect-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== Encryption Badge ===== */
+.enc-badge {
+display: none;
+align-items: center;
+gap: 6px;
+padding: 6px 12px;
+background: rgba(16,185,129,0.12);
+color: var(--success);
+font-size: 11px;
+font-weight: 600;
+border-bottom: 1px solid var(--border);
+flex-shrink: 0;
+}
+.enc-badge.show { display: flex; }
+
+/* ===== Messages ===== */
+.messages {
+flex: 1;
+overflow-y: auto;
+overflow-x: hidden;
+padding: 16px;
+display: flex;
+flex-direction: column;
+gap: 8px;
+background:
+radial-gradient(circle at 20% 30%, rgba(99,102,241,0.05) 0%, transparent 40%),
+radial-gradient(circle at 80% 70%, rgba(139,92,246,0.05) 0%, transparent 40%),
+var(--bg);
+-webkit-overflow-scrolling: touch;
+min-height: 0;
+}
+.messages::-webkit-scrollbar { width: 6px; }
+.messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+body.dark .messages::-webkit-scrollbar-thumb { background: #475569; }
+
+.welcome { text-align: center; color: var(--text-light); padding: 30px 15px; font-size: 13.5px; line-height: 1.9; }
+.welcome .emoji { font-size: 52px; display: block; margin-bottom: 15px; }
+
+.msg {
+max-width: 80%;
+padding: 9px 13px;
+border-radius: 16px;
+font-size: 14px;
+line-height: 1.5;
+word-wrap: break-word;
+animation: pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+overflow-wrap: anywhere;
+}
+@keyframes pop {
+from { opacity: 0; transform: scale(0.92) translateY(6px); }
+to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.msg.me { align-self: flex-start; background: var(--bubble-me); color: white; border-bottom-right-radius: 4px; }
+.msg.other { align-self: flex-end; background: var(--bubble-other); color: var(--text-dark); border-bottom-left-radius: 4px; border: 1px solid var(--border); }
+.msg .time { display: block; font-size: 10px; opacity: 0.7; margin-top: 4px; text-align: left; }
+
+.msg img.chat-img {
+max-width: 100%;
+max-height: 250px;
+border-radius: 10px;
+display: block;
+margin-bottom: 5px;
+cursor: pointer;
+}
+
+.file-bubble { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.file-icon { font-size: 26px; }
+.file-info { flex: 1; min-width: 0; }
+.file-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; word-break: break-all; }
+.file-size { font-size: 11px; opacity: 0.75; }
+.file-download {
+display: inline-block;
+margin-top: 6px;
+padding: 5px 12px;
+background: rgba(255,255,255,0.25);
+border-radius: 8px;
+color: inherit;
+text-decoration: none;
+font-size: 12px;
+font-weight: 600;
+cursor: pointer;
+border: none;
+}
+.msg.other .file-download { background: rgba(99,102,241,0.15); color: var(--primary); }
+
+.system-msg {
+text-align: center;
+font-size: 11.5px;
+color: var(--text-light);
+padding: 6px 14px;
+background: var(--panel);
+border-radius: 20px;
+align-self: center;
+border: 1px solid var(--border);
+max-width: 90%;
+}
+
+/* ===== Input Area ===== */
+.input-area {
+padding: 10px 12px;
+padding-bottom: max(10px, env(safe-area-inset-bottom));
+background: var(--panel);
+border-top: 1px solid var(--border);
+display: flex;
+gap: 8px;
+align-items: center;
+flex-shrink: 0;
+}
+
+.attach-btn {
+width: 42px; height: 42px;
+border-radius: 50%;
+background: rgba(99,102,241,0.1);
+color: var(--primary);
+border: none;
+cursor: pointer;
+font-size: 19px;
+display: flex; align-items: center; justify-content: center;
+flex-shrink: 0;
+}
+.attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.input-area input[type="text"] {
+flex: 1;
+padding: 11px 16px;
+border: 2px solid var(--border);
+border-radius: 22px;
+font-size: 14px;
+outline: none;
+background: var(--bg);
+color: var(--text-dark);
+min-width: 0;
+}
+.input-area input[type="text"]:focus { border-color: var(--primary); }
+.input-area input[type="text"]:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.send-btn {
+width: 42px; height: 42px;
+border-radius: 50%;
+background: linear-gradient(135deg, var(--primary), #8b5cf6);
+color: white;
+border: none;
+cursor: pointer;
+font-size: 18px;
+display: flex; align-items: center; justify-content: center;
+box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+flex-shrink: 0;
+}
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+/* ===== Typing ===== */
+.typing-indicator {
+padding: 4px 20px;
+font-size: 11.5px;
+color: var(--text-light);
+font-style: italic;
+height: 20px;
+flex-shrink: 0;
+opacity: 0;
+transition: opacity 0.2s;
+}
+.typing-indicator.show { opacity: 1; }
+
+/* ===== Image Modal ===== */
+.img-modal {
+position: fixed;
+inset: 0;
+background: rgba(0,0,0,0.92);
+display: none;
+align-items: center;
+justify-content: center;
+z-index: 1000;
+padding: 20px;
+}
+.img-modal.show { display: flex; }
+.img-modal img { max-width: 100%; max-height: 100%; border-radius: 12px; }
+.img-modal .close-modal {
+position: absolute;
+top: 20px; left: 20px;
+background: rgba(255,255,255,0.2);
+color: white;
+border: none;
+width: 44px; height: 44px;
+border-radius: 50%;
+font-size: 20px;
+cursor: pointer;
+}
+
+/* ===== Toast ===== */
+.toast {
+position: fixed;
+top: 90px;
+left: 50%;
+transform: translateX(-50%) translateY(-20px);
+background: rgba(30,41,59,0.96);
+color: white;
+padding: 10px 20px;
+border-radius: 12px;
+font-size: 13px;
+opacity: 0;
+transition: all 0.3s;
+pointer-events: none;
+z-index: 2500;
+max-width: 90%;
+text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== Pulse ===== */
+@keyframes pulse {
+0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+<div class="sidebar-header">
+<h3>💬 المحادثات</h3>
+<button class="new-chat-btn" onclick="newChat()" title="محادثة جديدة">+</button>
+</div>
+<div class="chat-list" id="chatList"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+<div class="header">
+<button class="header-btn" onclick="toggleSidebar()" title="القائمة">☰</button>
+<div class="avatar" id="headerAvatar">💬</div>
+<div class="header-info">
+<h1 id="headerName">واصل</h1>
+<div class="status">
+<span class="status-dot" id="statusDot"></span>
+<span id="statusText">جارٍ التهيئة...</span>
+</div>
+</div>
+<button class="header-btn" onclick="toggleTheme()" id="themeBtn" title="الوضع الليلي">🌙</button>
+<button class="header-btn" onclick="clearCurrentChat()" title="مسح المحادثة">🗑️</button>
+</div>
+
+<div class="connect-panel" id="connectPanel">
+<div class="my-id-box">
+<div class="my-id" id="myId">------</div>
+<button class="icon-btn" onclick="copyId()" title="نسخ">📋</button>
+</div>
+<div class="connect-form">
+<input
+id="peerIdInput"
+type="tel"
+inputmode="numeric"
+pattern="[0-9]{6}"
+maxlength="6"
+placeholder="أدخل الرقم (6 خانات)"
+autocomplete="off"
+/>
+<button class="connect-btn" id="connectBtn" onclick="connect()">اتصال</button>
+</div>
+</div>
+
+<div class="enc-badge" id="encBadge">🔐 مشفّر من الطرف إلى الطرف (AES-GCM)</div>
+
+<div class="messages" id="messages">
+<div class="welcome">
+<span class="emoji">🔐</span>
+<strong>مراسلة مباشرة ومشفّرة</strong><br>
+شارك رقمك المكوّن من 6 خانات مع صديقك<br>
+<small style="opacity:0.7">لا يوجد خادم — الاتصال مباشر بينكما</small>
+</div>
+</div>
+
+<div class="typing-indicator" id="typingIndicator">✍️ يكتب...</div>
+
+<div class="input-area">
+<button class="attach-btn" onclick="document.getElementById('fileInput').click()" id="attachBtn" disabled title="إرسال ملف">📎</button>
+<input type="file" id="fileInput" style="display:none" onchange="handleFileSelect(event)" />
+<input id="msgInput" type="text" placeholder="اكتب رسالة..." disabled />
+<button class="send-btn" id="sendBtn" onclick="send()" disabled>➤</button>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+</div>
+
+<div class="img-modal" id="imgModal" onclick="closeImage()">
+<button class="close-modal">✕</button>
+<img id="modalImg" src="" alt="" />
+</div>
+
+<script>
+/* =========================================================
+1. التهيئة العامة
+========================================================= */
+const els = {
+myId: document.getElementById('myId'),
+peerIdInput: document.getElementById('peerIdInput'),
+connectBtn: document.getElementById('connectBtn'),
+messages: document.getElementById('messages'),
+msgInput: document.getElementById('msgInput'),
+sendBtn: document.getElementById('sendBtn'),
+attachBtn: document.getElementById('attachBtn'),
+fileInput: document.getElementById('fileInput'),
+statusDot: document.getElementById('statusDot'),
+statusText: document.getElementById('statusText'),
+toast: document.getElementById('toast'),
+sidebar: document.getElementById('sidebar'),
+chatList: document.getElementById('chatList'),
+headerName: document.getElementById('headerName'),
+headerAvatar: document.getElementById('headerAvatar'),
+encBadge: document.getElementById('encBadge'),
+typingIndicator: document.getElementById('typingIndicator'),
+themeBtn: document.getElementById('themeBtn'),
+imgModal: document.getElementById('imgModal'),
+modalImg: document.getElementById('modalImg'),
+};
+
+let peer = null;
+let conn = null;
+let myPeerId = null;
+let myEncryptionKey = null;
+let typingTimeout = null;
+
+let chats = JSON.parse(localStorage.getItem('wasel_chats') || '{}');
+let currentChatId = null;
+
+if (localStorage.getItem('wasel_theme') === 'dark') {
+document.body.classList.add('dark');
+els.themeBtn.textContent = '☀️';
+}
+
+/* =========================================================
+2. أدوات مساعدة
+========================================================= */
+function showToast(text, duration = 2200) {
+els.toast.textContent = text;
+els.toast.classList.add('show');
+clearTimeout(els.toast._t);
+els.toast._t = setTimeout(() => els.toast.classList.remove('show'), duration);
+}
+
+function escapeHtml(str) {
+const d = document.createElement('div');
+d.textContent = str == null ? '' : String(str);
+return d.innerHTML;
+}
+
+function nowTime() {
+return new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatSize(bytes) {
+if (bytes < 1024) return bytes + ' B';
+if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+return (bytes/1024/1024).toFixed(2) + ' MB';
+}
+
+function formatNumber(id) {
+if (!id) return '------';
+return id.toString().replace(/(\d{3})(\d{3})/, '$1 $2');
+}
+
+function setStatus(state, text) {
+els.statusDot.className = 'status-dot ' + state;
+els.statusText.textContent = text;
+}
+
+function setConnectedUI(connected) {
+els.msgInput.disabled = !connected;
+els.sendBtn.disabled = !connected;
+els.attachBtn.disabled = !connected;
+els.connectBtn.disabled = connected;
+els.encBadge.classList.toggle('show', connected);
+if (connected) els.msgInput.focus();
+}
+
+/* =========================================================
+3. الوضع الليلي
+========================================================= */
+function toggleTheme() {
+document.body.classList.toggle('dark');
+const isDark = document.body.classList.contains('dark');
+els.themeBtn.textContent = isDark ? '☀️' : '🌙';
+localStorage.setItem('wasel_theme', isDark ? 'dark' : 'light');
+}
+
+/* =========================================================
+4. الشريط الجانبي والمحادثات
+========================================================= */
+function toggleSidebar() {
+els.sidebar.classList.toggle('open');
+}
+
+function saveChats() {
+const toSave = {};
+for (const id in chats) {
+toSave[id] = {
+name: chats[id].name,
+unread: chats[id].unread || 0,
+encrypted: chats[id].encrypted || false,
+messages: chats[id].messages.map(m => {
+if ((m.type === 'image' || m.type === 'file') && m.data && m.data.length > 500000) {
+return { ...m, data: null, note: '[محتوى كبير — لم يُحفظ]' };
+}
+return m;
+}),
+};
+}
+try { localStorage.setItem('wasel_chats', JSON.stringify(toSave)); }
+catch (e) { console.warn('localStorage ممتلئ', e); }
+}
+
+function renderChatList() {
+els.chatList.innerHTML = '';
+const ids = Object.keys(chats);
+if (!ids.length) {
+els.chatList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-light);font-size:12.5px">لا توجد محادثات بعد</div>';
+return;
+}
+ids.forEach(id => {
+const c = chats[id];
+const last = c.messages[c.messages.length - 1];
+const preview = last
+? (last.type === 'image' ? '📷 صورة'
+: last.type === 'file' ? '📎 ' + last.name
+: last.text).slice(0, 40)
+: 'لا رسائل';
+
+const item = document.createElement('div');
+item.className = 'chat-item' + (id === currentChatId ? ' active' : '');
+item.innerHTML = `
+<div class="chat-item-avatar">${escapeHtml(c.name)}</div>
+<div class="chat-item-info">
+<div class="chat-item-name">${escapeHtml(c.name)}${c.unread ? ` <span style="background:var(--danger);color:white;border-radius:10px;padding:1px 6px;font-size:10px">${c.unread}</span>` : ''}</div>
+<div class="chat-item-preview">${escapeHtml(preview)}</div>
+</div>
+<button class="chat-item-delete" title="حذف">✕</button>
+`;
+item.querySelector('.chat-item-info').onclick = () => openChat(id);
+item.querySelector('.chat-item-avatar').onclick = () => openChat(id);
+item.querySelector('.chat-item-delete').onclick = (e) => {
+e.stopPropagation();
+deleteChat(id);
+};
+els.chatList.appendChild(item);
+});
+}
+
+function deleteChat(id) {
+if (!confirm('حذف هذه المحادثة نهائياً؟')) return;
+delete chats[id];
+if (currentChatId === id) {
+currentChatId = null;
+els.messages.innerHTML = '<div class="welcome"><span class="emoji">💬</span>اختر محادثة أو ابدأ واحدة جديدة</div>';
+els.headerName.textContent = 'واصل';
+els.headerAvatar.textContent = '💬';
+}
+saveChats();
+renderChatList();
+}
+
+function openChat(id) {
+currentChatId = id;
+if (!chats[id]) return;
+chats[id].unread = 0;
+renderChatList();
+els.headerName.textContent = chats[id].name;
+els.headerAvatar.textContent = chats[id].name.slice(0, 6);
+els.encBadge.classList.toggle('show', !!chats[id].encrypted);
+
+els.messages.innerHTML = '';
+chats[id].messages.forEach(m => renderMessage(m, m.fromMe, true));
+els.messages.scrollTop = els.messages.scrollHeight;
+
+if (conn && conn.open && conn.peer === id) {
+setStatus('online', 'متصل ✅');
+setConnectedUI(true);
+} else {
+setConnectedUI(false);
+setStatus('', 'غير متصل');
+}
+
+if (window.innerWidth < 768) els.sidebar.classList.remove('open');
+saveChats();
+}
+
+function newChat() {
+currentChatId = null;
+els.messages.innerHTML = `
+<div class="welcome">
+<span class="emoji">🔐</span>
+<strong>محادثة جديدة</strong><br>
+شارك رقمك مع صديقك، أو أدخل رقمه<br>
+<small style="opacity:0.7">كل محادثة لها مفتاح تشفير منفصل</small>
+</div>`;
+els.headerName.textContent = 'واصل';
+els.headerAvatar.textContent = '💬';
+els.encBadge.classList.remove('show');
+if (window.innerWidth < 768) els.sidebar.classList.remove('open');
+}
+
+function clearCurrentChat() {
+if (!currentChatId || !chats[currentChatId]) return;
+if (!confirm('مسح كل رسائل هذه المحادثة؟')) return;
+chats[currentChatId].messages = [];
+els.messages.innerHTML = '';
+saveChats();
+renderChatList();
+}
+
+/* =========================================================
+5. التشفير (AES-GCM + ECDH)
+========================================================= */
+async function generateKeyPair() {
+return await crypto.subtle.generateKey(
+{ name: 'ECDH', namedCurve: 'P-256' },
+true,
+['deriveKey']
+);
+}
+
+async function exportPublicKey(key) {
+const raw = await crypto.subtle.exportKey('raw', key);
+return btoa(String.fromCharCode(...new Uint8Array(raw)));
+}
+
+async function importPublicKey(b64) {
+const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+return await crypto.subtle.importKey(
+'raw', raw, { name: 'ECDH', namedCurve: 'P-256' }, true, []
+);
+}
+
+async function deriveSharedKey(privateKey, publicKey) {
+return await crypto.subtle.deriveKey(
+{ name: 'ECDH', public: publicKey },
+privateKey,
+{ name: 'AES-GCM', length: 256 },
+false,
+['encrypt', 'decrypt']
+);
+}
+
+async function encryptText(plaintext, key) {
+const iv = crypto.getRandomValues(new Uint8Array(12));
+const enc = new TextEncoder().encode(plaintext);
+const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc);
+return {
+iv: btoa(String.fromCharCode(...iv)),
+data: btoa(String.fromCharCode(...new Uint8Array(cipher))),
+};
+}
+
+async function decryptText({ iv, data }, key) {
+try {
+const ivArr = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+const dataArr = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: ivArr }, key, dataArr);
+return new TextDecoder().decode(plain);
+} catch (e) {
+console.error('فشل فك التشفير', e);
+return '⚠️ تعذّر فك تشفير الرسالة';
+}
+}
+
+async function encryptBuffer(buffer, key) {
+const iv = crypto.getRandomValues(new Uint8Array(12));
+const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, buffer);
+return { iv, cipher: new Uint8Array(cipher) };
+}
+
+async function decryptBuffer(iv, cipherBuf, key) {
+return await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherBuf);
+}
+
+/* =========================================================
+6. تهيئة PeerJS مع معرّف رقمي (بدون QR)
+========================================================= */
+async function initPeer() {
+setStatus('', 'جارٍ الاتصال بشبكة P2P...');
+
+window.myKeyPair = await generateKeyPair();
+window.myPublicKeyB64 = await exportPublicKey(window.myKeyPair.publicKey);
+
+// قائمة سيرفرات احتياطية
+const PEER_SERVERS = [
+{
+config: {
+iceServers: [
+{ urls: 'stun:stun.l.google.com:19302' },
+{ urls: 'stun:global.stun.twilio.com:3478' }
+]
+}
+},
+{
+host: '0.peerjs.com',
+port: 443,
+secure: true,
+path: '/',
+key: 'peerjs',
+config: {
+iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+}
+},
+{
+host: 'peerjs.92k.de',
+port: 443,
+secure: true,
+path: '/',
+key: 'peerjs',
+config: {
+iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+}
+}
+];
+
+function tryServer(serverConfig, id, timeoutMs = 8000) {
+return new Promise((resolve) => {
+let resolved = false;
+let testPeer;
+try {
+testPeer = new Peer(id, serverConfig);
+} catch(e) {
+resolve(null);
+return;
+}
+
+const cleanup = (success) => {
+if (resolved) return;
+resolved = true;
+clearTimeout(timer);
+if (!success) { try { testPeer.destroy(); } catch(e){} }
+resolve(success ? testPeer : null);
+};
+
+const timer = setTimeout(() => {
+console.warn('⏱️ مهلة السيرفر');
+cleanup(false);
+}, timeoutMs);
+
+testPeer.on('open', () => {
+console.log('✅ متصل بسيرفر');
+cleanup(true);
+});
+
+testPeer.on('error', (err) => {
+console.warn('❌ خطأ:', err.type);
+cleanup(false);
+});
+});
+}
+
+function randomId() {
+return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+let attempts = 0;
+const MAX_ATTEMPTS = 12;
+let connected = false;
+
+outerLoop:
+for (const serverConfig of PEER_SERVERS) {
+for (let i = 0; i < 4; i++) {
+attempts++;
+const id = randomId();
+setStatus('', `جارٍ الاتصال... (${attempts}/${MAX_ATTEMPTS})`);
+console.log(`🎲 محاولة ${attempts}: رقم ${id}`);
+
+const testPeer = await tryServer(serverConfig, id);
+if (testPeer) {
+peer = testPeer;
+connected = true;
+break outerLoop;
+}
+}
+}
+
+if (!connected || !peer) {
+setStatus('offline', 'فشل الاتصال بالسيرفر');
+showToast('⚠️ تعذّر الاتصال — تحقق من الإنترنت');
+addSystemMessage('❌ فشل الاتصال بسيرفر P2P. جرّب إعادة التحميل.');
+return;
+}
+
+const currentId = peer.id;
+
+peer.on('open', id => {
+myPeerId = id;
+els.myId.textContent = formatNumber(id);
+els.myId.dataset.id = id;
+setStatus('', 'جاهز — شارك رقمك');
+addSystemMessage('✅ رقمك جاهز: ' + formatNumber(id));
+});
+
+if (peer.open && !myPeerId) {
+myPeerId = currentId;
+els.myId.textContent = formatNumber(currentId);
+els.myId.dataset.id = currentId;
+setStatus('', 'جاهز — شارك رقمك');
+addSystemMessage('✅ رقمك جاهز: ' + formatNumber(currentId));
+}
+
+peer.on('connection', c => {
+if (conn && conn.open) { c.close(); return; }
+conn = c;
+setupConnection(c, true);
+showToast('📞 طرف آخر اتصل بك');
+});
+
+peer.on('error', err => {
+console.error(err);
+if (err.type === 'peer-unavailable') {
+showToast('⚠️ الرقم غير موجود أو غير متصل');
+} else if (err.type === 'network' || err.type === 'server-error') {
+setStatus('offline', 'انقطع الاتصال بالسيرفر');
+showToast('⚠️ فقد الاتصال — جرّب إعادة التحميل');
+} else {
+showToast('⚠️ ' + (err.type || 'خطأ'));
+}
+});
+
+peer.on('disconnected', () => {
+console.warn('🔌 انقطع الاتصال');
+setStatus('offline', 'إعادة الاتصال...');
+try { peer.reconnect(); } catch(e){}
+});
+}
+
+/* =========================================================
+7. إعداد الاتصال + تبادل المفاتيح
+========================================================= */
+function setupConnection(c, isIncoming) {
+conn = c;
+
+c.on('open', () => {
+c.send({ type: 'handshake', publicKey: window.myPublicKeyB64 });
+});
+
+c.on('data', async data => {
+if (!data || typeof data !== 'object') return;
+
+if (data.type === 'handshake') {
+const theirPub = await importPublicKey(data.publicKey);
+myEncryptionKey = await deriveSharedKey(window.myKeyPair.privateKey, theirPub);
+
+if (isIncoming) {
+c.send({ type: 'handshake-ack', publicKey: window.myPublicKeyB64 });
+}
+
+ensureChat(c.peer);
+chats[c.peer].encrypted = true;
+els.encBadge.classList.add('show');
+setStatus('online', 'متصل ✅');
+setConnectedUI(true);
+addSystemMessage('🔐 تم إنشاء قناة مشفّرة');
+showToast('✅ تم الاتصال وتشفير القناة');
+saveChats();
+renderChatList();
+return;
+}
+
+if (data.type === 'handshake-ack') {
+const theirPub = await importPublicKey(data.publicKey);
+myEncryptionKey = await deriveSharedKey(window.myKeyPair.privateKey, theirPub);
+ensureChat(c.peer);
+chats[c.peer].encrypted = true;
+els.encBadge.classList.add('show');
+setStatus('online', 'متصل ✅');
+setConnectedUI(true);
+addSystemMessage('🔐 تم إنشاء قناة مشفّرة');
+saveChats();
+renderChatList();
+return;
+}
+
+if (data.type === 'typing') {
+showTypingIndicator();
+return;
+}
+
+if (data.type === 'text') {
+const plain = await decryptText(data.payload, myEncryptionKey);
+receiveMessage({ type: 'text', text: plain });
+return;
+}
+
+if (data.type === 'image') {
+try {
+const iv = Uint8Array.from(atob(data.iv), c => c.charCodeAt(0));
+const cipherBuf = Uint8Array.from(atob(data.data), c => c.charCodeAt(0));
+const plainBuf = await decryptBuffer(iv, cipherBuf, myEncryptionKey);
+const blob = new Blob([plainBuf], { type: data.mime });
+const url = URL.createObjectURL(blob);
+receiveMessage({ type: 'image', data: url, name: data.name });
+} catch (e) { console.error(e); }
+return;
+}
+
+if (data.type === 'file') {
+try {
+const iv = Uint8Array.from(atob(data.iv), c => c.charCodeAt(0));
+const cipherBuf = Uint8Array.from(atob(data.data), c => c.charCodeAt(0));
+const plainBuf = await decryptBuffer(iv, cipherBuf, myEncryptionKey);
+const blob = new Blob([plainBuf], { type: data.mime });
+const url = URL.createObjectURL(blob);
+receiveMessage({ type: 'file', data: url, name: data.name, size: data.size, mime: data.mime });
+} catch (e) { console.error(e); }
+return;
+}
+});
+
+c.on('close', () => {
+setStatus('', 'انقطع الاتصال');
+setConnectedUI(false);
+addSystemMessage('❌ انتهت المحادثة');
+conn = null;
+myEncryptionKey = null;
+els.encBadge.classList.remove('show');
+});
+
+c.on('error', err => {
+console.error(err);
+showToast('⚠️ خطأ في الاتصال');
+});
+}
+
+function ensureChat(id) {
+if (!chats[id]) {
+chats[id] = {
+name: formatNumber(id),
+messages: [],
+unread: 0,
+encrypted: false,
+};
+}
+if (!currentChatId) {
+currentChatId = id;
+openChat(id);
+}
+}
+
+/* =========================================================
+8. الاتصال بطرف آخر
+========================================================= */
+function connect() {
+let targetId = els.peerIdInput.value.trim().replace(/\s+/g, '').replace(/[^\d]/g, '');
+
+if (!targetId) return showToast('⚠️ أدخل رقم الطرف الآخر');
+if (targetId.length !== 6) return showToast('⚠️ الرقم يجب أن يكون 6 خانات');
+if (targetId === myPeerId) return showToast('⚠️ لا يمكنك الاتصال بنفسك');
+
+setStatus('', 'جارٍ الاتصال...');
+addSystemMessage('⏳ جارٍ الاتصال بالرقم ' + formatNumber(targetId) + '...');
+
+const c = peer.connect(targetId, { reliable: true });
+setupConnection(c, false);
+
+setTimeout(() => {
+if (c && !c.open) {
+c.close();
+conn = null;
+setStatus('', 'فشل الاتصال');
+addSystemMessage('❌ لم يتم العثور على الطرف الآخر');
+showToast('❌ الرقم غير متصل');
+}
+}, 10000);
+}
+
+/* =========================================================
+9. استقبال وعرض الرسائل
+========================================================= */
+function receiveMessage(msg) {
+const cid = (conn && conn.peer) || currentChatId || 'unknown';
+ensureChat(cid);
+
+const record = { ...msg, fromMe: false, time: nowTime() };
+chats[cid].messages.push(record);
+
+if (currentChatId === cid) {
+renderMessage(record, false);
+els.messages.scrollTop = els.messages.scrollHeight;
+} else {
+chats[cid].unread = (chats[cid].unread || 0) + 1;
+}
+
+notify(msg);
+saveChats();
+renderChatList();
+}
+
+function renderMessage(msg, fromMe, silent = false) {
+const div = document.createElement('div');
+div.className = 'msg ' + (fromMe ? 'me' : 'other');
+
+let body = '';
+if (msg.type === 'image') {
+if (msg.data) {
+body = `<img class="chat-img" src="${msg.data}" alt="صورة" onclick="openImage('${msg.data}')">`;
+} else {
+body = '<span style="opacity:0.7">📷 صورة (غير متوفرة)</span>';
+}
+} else if (msg.type === 'file') {
+if (msg.data) {
+body = `
+<div class="file-bubble">
+<div class="file-icon">📄</div>
+<div class="file-info">
+<div class="file-name">${escapeHtml(msg.name)}</div>
+<div class="file-size">${formatSize(msg.size || 0)}</div>
+<button class="file-download" onclick="downloadFile('${msg.data}', '${escapeHtml(msg.name)}')">⬇️ تنزيل</button>
+</div>
+</div>`;
+} else {
+body = `📎 ${escapeHtml(msg.name)} (غير متوفر)`;
+}
+} else {
+body = escapeHtml(msg.text);
+}
+
+div.innerHTML = `${body}<span class="time">${msg.time}</span>`;
+els.messages.appendChild(div);
+}
+
+function addSystemMessage(text) {
+const div = document.createElement('div');
+div.className = 'system-msg';
+div.textContent = text;
+els.messages.appendChild(div);
+els.messages.scrollTop = els.messages.scrollHeight;
+}
+
+/* =========================================================
+10. إرسال رسالة نصية
+========================================================= */
+async function send() {
+const text = els.msgInput.value.trim();
+if (!text || !conn || !conn.open || !myEncryptionKey) return;
+
+const payload = await encryptText(text, myEncryptionKey);
+conn.send({ type: 'text', payload });
+
+const record = { type: 'text', text, fromMe: true, time: nowTime() };
+ensureChat(conn.peer);
+chats[conn.peer].messages.push(record);
+renderMessage(record, true);
+
+els.msgInput.value = '';
+els.msgInput.focus();
+els.messages.scrollTop = els.messages.scrollHeight;
+
+saveChats();
+renderChatList();
+}
+
+/* =========================================================
+11. إرسال الملفات والصور
+========================================================= */
+async function handleFileSelect(e) {
+const file = e.target.files[0];
+if (!file) return;
+if (!conn || !conn.open || !myEncryptionKey) return showToast('⚠️ غير متصل');
+
+const MAX = 5 * 1024 * 1024;
+if (file.size > MAX) return showToast('⚠️ الحجم الأقصى 5 ميغابايت');
+
+showToast('📤 جارٍ الإرسال...');
+
+const buffer = await file.arrayBuffer();
+const { iv, cipher } = await encryptBuffer(buffer, myEncryptionKey);
+const ivB64 = btoa(String.fromCharCode(...iv));
+const dataB64 = btoa(String.fromCharCode(...cipher));
+
+const isImage = file.type.startsWith('image/');
+const type = isImage ? 'image' : 'file';
+
+conn.send({
+type,
+name: file.name,
+mime: file.type,
+size: file.size,
+iv: ivB64,
+data: dataB64,
+});
+
+const url = URL.createObjectURL(file);
+const record = {
+type,
+data: url,
+name: file.name,
+size: file.size,
+mime: file.type,
+fromMe: true,
+time: nowTime(),
+};
+ensureChat(conn.peer);
+chats[conn.peer].messages.push(record);
+renderMessage(record, true);
+els.messages.scrollTop = els.messages.scrollHeight;
+saveChats();
+renderChatList();
+
+els.fileInput.value = '';
+showToast('✅ تم الإرسال');
+}
+
+function downloadFile(url, name) {
+const a = document.createElement('a');
+a.href = url;
+a.download = name;
+a.click();
+}
+
+/* =========================================================
+12. مؤشر الكتابة
+========================================================= */
+els.msgInput.addEventListener('input', () => {
+if (!conn || !conn.open) return;
+if (typingTimeout) return;
+conn.send({ type: 'typing' });
+typingTimeout = setTimeout(() => typingTimeout = null, 2000);
+});
+
+function showTypingIndicator() {
+els.typingIndicator.classList.add('show');
+clearTimeout(showTypingIndicator._t);
+showTypingIndicator._t = setTimeout(() => {
+els.typingIndicator.classList.remove('show');
+}, 2500);
+}
+
+/* =========================================================
+13. الإشعارات
+========================================================= */
+async function requestNotificationPermission() {
+if (!('Notification' in window)) return;
+if (Notification.permission === 'default') {
+try { await Notification.requestPermission(); } catch(e){}
+}
+}
+
+function notify(msg) {
+if (!('Notification' in window)) return;
+if (Notification.permission !== 'granted') return;
+if (document.hasFocus()) return;
+
+let body = '';
+if (msg.type === 'text') body = msg.text.slice(0, 80);
+else if (msg.type === 'image') body = '📷 صورة';
+else if (msg.type === 'file') body = '📎 ' + msg.name;
+
+try { new Notification('💬 رسالة جديدة', { body }); }
+catch (e) { console.warn(e); }
+}
+
+/* =========================================================
+14. عرض الصور بحجم كامل
+========================================================= */
+function openImage(src) {
+els.modalImg.src = src;
+els.imgModal.classList.add('show');
+}
+function closeImage() {
+els.imgModal.classList.remove('show');
+els.modalImg.src = '';
+}
+
+/* =========================================================
+15. نسخ الرقم
+========================================================= */
+function copyId() {
+const id = els.myId.dataset.id;
+if (!id) return;
+const formatted = formatNumber(id);
+
+if (navigator.clipboard && window.isSecureContext) {
+navigator.clipboard.writeText(id).then(() => {
+showToast('📋 تم نسخ الرقم: ' + formatted);
+}).catch(() => fallbackCopy(id, formatted));
+} else {
+fallbackCopy(id, formatted);
+}
+}
+
+function fallbackCopy(text, display) {
+const ta = document.createElement('textarea');
+ta.value = text;
+ta.style.position = 'fixed';
+ta.style.opacity = '0';
+document.body.appendChild(ta);
+ta.select();
+try {
+document.execCommand('copy');
+showToast('📋 تم نسخ الرقم: ' + display);
+} catch(e) {
+showToast('⚠️ تعذّر النسخ — انسخ يدوياً: ' + display);
+}
+document.body.removeChild(ta);
+}
+
+/* =========================================================
+16. الأحداث العامة
+========================================================= */
+els.msgInput.addEventListener('keypress', e => {
+if (e.key === 'Enter' && !e.shiftKey) {
+e.preventDefault();
+send();
+}
+});
+
+els.peerIdInput.addEventListener('input', e => {
+e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+});
+
+els.peerIdInput.addEventListener('keypress', e => {
+if (e.key === 'Enter') connect();
+});
+
+window.addEventListener('beforeunload', saveChats);
+
+/* =========================================================
+17. PWA — Service Worker + Installation
+========================================================= */
+const SW_CODE = `
+const CACHE_NAME = 'wasel-v2';
+const ASSETS = [
+'./',
+'./index.html',
+'https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js'
+];
+
+self.addEventListener('install', e => {
+e.waitUntil(
+caches.open(CACHE_NAME).then(cache => {
+return Promise.all(
+ASSETS.map(url =>
+cache.add(new Request(url, {cache: 'reload'})).catch(()=>{})
+)
+);
+}).then(() => self.skipWaiting())
+);
+});
+
+self.addEventListener('activate', e => {
+e.waitUntil(
+caches.keys().then(keys =>
+Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+).then(() => self.clients.claim())
+);
+});
+
+self.addEventListener('fetch', e => {
+const req = e.request;
+if (req.url.includes('peerjs') && req.url.includes('socket')) return;
+if (req.url.startsWith('wss://')) return;
+if (req.method !== 'GET') return;
+
+e.respondWith(
+fetch(req).then(res => {
+if (res && res.status === 200) {
+const clone = res.clone();
+caches.open(CACHE_NAME).then(c => c.put(req, clone).catch(()=>{}));
+}
+return res;
+}).catch(() => {
+return caches.match(req).then(cached => {
+if (cached) return cached;
+if (req.mode === 'navigate') return caches.match('./index.html');
+return new Response('Offline', {status: 503});
+});
+})
+);
+});
+
+self.addEventListener('message', e => {
+if (e.data === 'SKIP_WAITING') self.skipWaiting();
+});
+`;
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+window.addEventListener('load', () => {
+const blob = new Blob([SW_CODE], { type: 'application/javascript' });
+const swUrl = URL.createObjectURL(blob);
+navigator.serviceWorker.register(swUrl, { scope: './' })
+.then(reg => console.log('✅ Service Worker مسجّل:', reg.scope))
+.catch(err => console.warn('⚠️ SW:', err));
+});
+}
+
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+e.preventDefault();
+deferredPrompt = e;
+addInstallButton();
+});
+
+function addInstallButton() {
+const header = document.querySelector('.header');
+if (!header || document.getElementById('installBtn')) return;
+
+const btn = document.createElement('button');
+btn.id = 'installBtn';
+btn.className = 'header-btn';
+btn.title = 'تثبيت التطبيق';
+btn.textContent = '⬇️';
+btn.style.cssText = 'background: linear-gradient(135deg, #10b981, #059669); animation: pulse 2s infinite;';
+
+btn.onclick = async () => {
+if (!deferredPrompt) return;
+deferredPrompt.prompt();
+const { outcome } = await deferredPrompt.userChoice;
+if (outcome === 'accepted') showToast('🎉 تم تثبيت التطبيق');
+deferredPrompt = null;
+btn.remove();
+};
+
+header.appendChild(btn);
+}
+
+window.addEventListener('appinstalled', () => {
+console.log('🎉 تم التثبيت');
+deferredPrompt = null;
+const btn = document.getElementById('installBtn');
+if (btn) btn.remove();
+showToast('✅ التطبيق مثبّت الآن');
+});
+
+/* =========================================================
+تشغيل
+========================================================= */
+(async function start() {
+renderChatList();
+await requestNotificationPermission();
+await initPeer();
+})();
+</script>
+</body>
+</html>
